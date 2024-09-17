@@ -1,0 +1,142 @@
+MODULE MattMove
+	! Test code for picking and placing objects in a loop    
+    PERS jointtarget jCur;
+    PERS robtarget   pCur;
+    CONST num zTab := 147;
+    CONST num zCon := 22.1;
+    
+    ! format is xi, yi, xf, yf, yaw angle change;
+    !VAR num aPnP{2,5}:=[[-100,300,550,0,45],[100,350,450,0,30]];
+    VAR num aPnP{5};
+    CONST robtarget pZeros := [[0,0,0],[0,0,-1,0],[0,0,0,0],[9E+09,9E+09,9E+09,9E+09,9E+09,9E+09]];   
+
+    VAR string myStrNum := "10";
+    VAR string myStrArr := "[-100,300,550,0,45]";
+    VAR bool ok;
+    VAR num Conv;
+    PERS num arr{5};
+    
+    PROC Main()
+        TPWrite "-------------- Start";
+
+        ok := StrToVal(myStrArr,aPnP);
+        TPWrite ValToStr(aPnP{1}) + " " + ValToStr(aPnP{2}) + " " + ValToStr(aPnP{3}) + " " + ValToStr(aPnP{4}) + " " + ValToStr(aPnP{5});
+        
+        
+        MoveToCalibPos;
+        PrintCurPose;
+        MattTurnVacOff;
+        
+        jCur := CJointT();
+        pCur := CRobT(\Tool:=tSCup);   
+        !PrintPose pCur;
+        !PrintJoint jCur;
+        
+        PickNPlaceXYA aPnP{1}, aPnP{2}, aPnP{3}, aPnP{4}, aPnP{5};
+        
+!        FOR i FROM 1 TO Dim(aPnP,1) DO
+!            PickNPlaceXYA aPnP{i,1}, aPnP{i,2}, aPnP{i,3}, aPnP{i,4}, aPnP{i,5};
+!        ENDFOR
+        
+!        MoveToCalibPos;
+        
+        TPWrite "-------------- Done";
+        
+    ENDPROC
+
+    PROC PickNPlaceXYA(num xi, num yi, num xf, num yf, num angle)
+        VAR robtarget pPick := pZeros;
+        VAR robtarget pPlace := pZeros;       
+        VAR num upOff := 50;
+        VAR speeddata spdFast := v150;
+        VAR speeddata spdSlow := v20;
+        pPick.trans := [xi,yi,zCon];
+        pPlace.trans := [xf,yf,zTab];
+        pPlace.rot := OrientZYX(180 + angle,0,180);               
+        
+        TPWrite "Starting PNP xya";
+        PrintPose(pPick);
+        PrintPose(pPlace);
+        
+        ! Picking
+        MoveJ Offs(pPick,0,0,upOff),    spdFast, fine, tSCup;  
+        MoveL pPick,                    spdSlow, fine, tSCup;
+        MattTurnVacOn;
+        TPWrite "Vac on";   
+        WaitTime 0.5;
+        MoveL Offs(pPick,0,0,200),      spdSlow, fine, tSCup;
+        
+        ! Move just above the target place
+        ! Angle anticlockwise
+        MoveJ Offs(pPlace,0,0,upOff),   spdFast, fine, tSCup;
+        MoveL pPlace,                   spdSlow, fine, tSCup;
+        MattTurnVacOff;
+        TPWrite "Vac off";  
+        MoveJ Offs(pPlace,0,0, 100),    spdFast, fine, tSCup;
+    ENDPROC
+    
+    PROC PrintCurPose()
+        PrintPose CRobT(\Tool:=tSCup);
+    ENDPROC
+    
+    PROC PrintCurJoint()
+        PrintJoint CJointT();
+    ENDPROC
+    
+    PROC MattTurnVacOn()
+        
+        ! Set VacRun on.
+        SetDO DO10_1, 1;
+        SetDO DO10_2, 1;
+        
+    ENDPROC
+    
+    PROC MattTurnVacOff()
+        
+        ! Set VacRun off.
+        SetDO DO10_2, 0;
+        SetDO DO10_1, 0;
+        
+    ENDPROC
+    
+    PROC MattTurnConOnSafely()
+        
+        ! An example of how an IF statement is structured.
+        ! DI10_1 is 'ConStat', and will only be equal to 1 if the conveyor is on and ready to run.
+        ! If it is ready to run, we will run it, if not, we will set it off so that we can fix it.
+        IF DI10_1 = 1 THEN
+            SetDO DO10_3, 1;
+        ELSE
+            SetDO DO10_3, 0;
+        ENDIF
+        
+    ENDPROC
+    
+    PROC MattTurnConOff()
+        SetDO DO10_3, 0;
+    ENDPROC
+    
+    PROC PrintPose(robtarget P)
+        TPWrite "x: " + NumToStr(P.trans.x,2) +
+                " y: " + NumToStr(P.trans.y,2) +
+                " z: " + NumToStr(P.trans.z,2) +
+                " Q: " + NumToStr(P.rot.q1,3) +
+                ", " + NumToStr(P.rot.q2,3) +
+                ", " + NumToStr(P.rot.q3,3) +
+                ", " + NumToStr(P.rot.q4,3);         
+    ENDPROC
+    
+    PROC PrintJoint(jointtarget J)
+        TPWrite "Joints = "  + NumToStr(J.robax.rax_1, 3) +
+                ", " + NumToStr(J.robax.rax_2, 3) +
+                ", " + NumToStr(J.robax.rax_3, 3) +
+                ", " + NumToStr(J.robax.rax_4, 3) +
+                ", " + NumToStr(J.robax.rax_5, 3) +
+                ", " + NumToStr(J.robax.rax_6, 3);
+    ENDPROC
+    
+    PROC MoveToPose(num Theta1, num Theta2, num Theta3, num Theta4, num Theta5, num Theta6)
+        MoveAbsJ [[Theta1, Theta2, Theta3, Theta4, Theta5, Theta6],[9E+9,9E+9,9E+9,9E+9,9E+9,9E+9]], v100, fine, tSCup;
+    ENDPROC
+   
+ENDMODULE
